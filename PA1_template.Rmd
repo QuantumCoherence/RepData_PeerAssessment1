@@ -1,25 +1,110 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
+title: "Reproducible Research: Project 1"
 output: 
   html_document:
     keep_md: true
 ---
 
+```{R , warning=F, echo = FALSE}
+#This code chunk simply makes sure that all the libraries used here are installed
+packages <- c("dplyr", "plotly")
+if ( length(missing_pkgs <- setdiff(packages, rownames(installed.packages()))) > 0) {
+  message("Missing package(s): ", paste(missing_pkgs, collapse = ", "))
+}
+```
 
 ## Loading and preprocessing the data
+### Loading
+```{R}
+dat = read.csv("activity.csv", header = TRUE)
+nasidx = which(!complete.cases(dat[,1 ]))
+nasdays = dat[nasidx,2]
+summary(nasdays)
+```
+### Processing
+From the summary of the NA values, it is clear that NAs are simply days during which no data were collected.  
+Adding a columun with the weekday names
+```{R , message=F, warning=F}
+dat[, 4] = weekdays(as.Date(dat[, 2]))
+ colnames(dat)[4] <- "weekdays"
+```
+## Mean total number of steps taken per day
+### Steps Per Day
+```{R , message=F, warning=F}
+library(dplyr)
+TotStepsEachDay = group_by(dat, date) %>% summarize(steps_per_day = sum(steps))
+hist(TotStepsEachDay$steps_per_day, 25, main = "Frequency of Total Steps per Day, Bin Size 1000 steps", xlab = "Total Steps Per Day")
+``` 
+  
+### Mean and Median of Total Steps Per Day
+```{R,  message=F, warning=F}
+summary(TotStepsEachDay)
+```
 
+### What is the average daily activity pattern?
+```{R, message=F, warning=F}
+library(plotly)
+clean_dat = dat[which(complete.cases(dat[,1 ])), ]
+missing_dat = dat[which(!complete.cases(dat[,1 ])), ]
+tm <- seq(0, 299*288, by = 300)
+now <- as.Date(clean_dat[1, 2])
+now <- as.POSIXct(now)
+now <- now-(9*60*60)
+x <- now+tm
+five_min_avg = group_by(clean_dat, interval) %>% summarize(five_min_mean = mean(steps))
+y <- unlist(five_min_avg[ ,2], use.names = FALSE)
+p <- plot_ly(x = ~x, y = ~y, mode = 'lines')
+ax <- list(title = "Average daily activity Oct 2nd - Nov 29th 2012")
+ay <- list(title = "5 Min Interval Steps")
+layout(p, xaxis= ax, yaxis = ay)
+```
 
+Time interval  with largest average numbe of step
+```{R, message=F, warning=F}
+five_min_avg[which(y==max(y)), 1]
+```
+### Imputing missing values
+Total number of raws with a missing value
+```{R, message=F, warning=F}
+length(which(!complete.cases(dat[,1 ])))
+```
+From the pre-processing phase of the analsys, we know the missing values correspond to whole days, when no data were collected.
+A simple strategy to imputing the missing data is simply replacing the missing days with the average activty day. 
+However, it might be useful to verify if the missing days display some other property that could be used to more accurately imput the missing data.   
+An easy way to do this is by checking what days of the week are missing. If for instance only Mondays were missing, and Mondays were to have much less steps than other days of the week, it would be more accurate to replace the missing data, with the average of the avaibale data collected on Mondays, rather than any other day.  
+Days where data are missing:
+```{R, message=F, warning=F}
+ levels(factor(clean_dat$weekdays))
+```
 
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
+Every single day of the week is inlcuded in the 8 days of missing data, indicating that there is no particular pattern linked with the missing data days, therefore we will simply replace them with the average day steps distribution shown above. 
+```{R, message=F, warning=F}
+for (i in seq(from=0, to=288*8-1, by=1)) {
+     missing_dat[1+i, 1] = five_min_avg[1+i%%288, 2]
+     }
+full_dat = bind_rows(missing_dat, clean_dat)
+TotStepsEachDay = group_by(full_dat, date) %>% summarize(steps_per_day = sum(steps))
+hist(TotStepsEachDay$steps_per_day, 25, main = "Frequency of Total Steps per Day, Bin Size 1000 steps - NA compensated", xlab = "Total Steps Per Day")
+```
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{R, message=F, warning=F}
+# Separate Weekdays from Weekend days
+weekends = full_dat[full_dat$weekdays == "Sunday" | full_dat$weekdays == "Saturday" , ]
+week = full_dat[full_dat$weekdays != "Sunday" & full_dat$weekdays != "Saturday" , ]
+
+# weekdays and weekend means plots
+
+five_min_avg_wkend = group_by(weekends, interval) %>% summarize(five_min_mean = mean(steps))
+y1 <- unlist(five_min_avg_wkend[ ,2], use.names = FALSE)
+five_min_avg_wk = group_by(week, interval) %>% summarize(five_min_mean = mean(steps))
+y2 <- unlist(five_min_avg_wk[ ,2], use.names = FALSE)
+
+ax1 <- list(title = "Average daily activity Oct 2nd - Nov 29th 2012 WEEKENDS vs WEEKDAYS")
+ay1 <- list(title = "5 Min Interval Steps")
+data <- data.frame(x, y1, y2)
+
+p <- plot_ly(data, x = ~x, y = ~y1, name = 'Week ends', type = 'scatter', mode = 'lines') %>%
+  add_trace(y = ~y2, name = 'Weekdays', mode = 'lines')
+layout(p, xaxis= ax1, yaxis = ay1)
+```
