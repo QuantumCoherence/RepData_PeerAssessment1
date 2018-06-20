@@ -1,8 +1,10 @@
 ---
-title: "Reproducible Research: Project 1"
-output: 
+title: 'Reproducible Research: Project 1'
+output:
   html_document:
-    keep_md: true
+    fig_caption: yes
+    keep_md: yes
+  pdf_document: default
 ---
 
 ```{R , warning=F, echo = FALSE}
@@ -107,4 +109,5 @@ data <- data.frame(x, y1, y2)
 p <- plot_ly(data, x = ~x, y = ~y1, name = 'Week ends', type = 'scatter', mode = 'lines') %>%
   add_trace(y = ~y2, name = 'Weekdays', mode = 'lines')
 layout(p, xaxis= ax1, yaxis = ay1)
+
 ```
